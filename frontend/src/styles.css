@@ -1,0 +1,415 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #f4f5f7;
+  color: #172b4d;
+  font-size: 13px;
+}
+.center { display: grid; place-items: center; height: 100vh; }
+.muted { color: #6b778c; }
+.spacer { flex: 1 1 auto; }
+.error { color: #c0392b; font-size: 14px; }
+button {
+  padding: 6px 12px; border: 1px solid #dfe1e6; background: #fff; border-radius: 4px;
+  cursor: pointer; font-size: 13px; color: #42526e;
+}
+button:hover { background: #f4f5f7; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: #0052cc; color: #fff; border-color: #0052cc; }
+button.primary:hover { background: #0747a6; }
+
+/* --- login --- */
+.login-wrap { display: grid; place-items: center; height: 100vh; }
+.login-card {
+  background: #fff; padding: 32px; border-radius: 6px; width: 320px;
+  box-shadow: 0 4px 16px rgba(9,30,66,.18); display: flex; flex-direction: column; gap: 14px;
+  border-top: 4px solid #0052cc;
+}
+.login-card h1 { margin: 0; color: #0052cc; }
+.login-card label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.login-card input { padding: 9px 10px; border: 2px solid #dfe1e6; border-radius: 4px; font-size: 14px; }
+.login-card input:focus { border-color: #4c9aff; outline: none; }
+.login-card button { background: #0052cc; color: #fff; border-color: #0052cc; padding: 9px; }
+
+/* --- topbar --- */
+.app { height: 100vh; display: flex; flex-direction: column; }
+.topbar {
+  display: flex; align-items: center; gap: 16px; padding: 8px 16px;
+  background: #0052cc; color: #fff; flex: 0 0 auto;
+}
+.brand { font-weight: 700; font-size: 18px; }
+.legend { display: flex; gap: 10px; align-items: center; font-size: 12px; }
+.legend .muted { color: #b3d4ff; }
+.lg { padding: 2px 8px; border-radius: 3px; color: #172b4d; }
+.lg-underestimated { background: #fff0b3; }
+.lg-committed { background: #abf5d1; }
+.user { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.user .muted { color: #deebff; }
+.chk { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.chk.light { color: #deebff; font-size: 12px; }
+
+/* --- toolbar --- */
+.toolbar {
+  display: flex; gap: 8px; align-items: center; padding: 7px 12px;
+  background: #fff; border-bottom: 1px solid #dfe1e6; flex: 0 0 auto; flex-wrap: wrap;
+}
+.toolbar input, .toolbar select {
+  padding: 6px 8px; border: 1px solid #dfe1e6; border-radius: 4px; font-size: 13px; background: #fff;
+}
+.toolbar .search { min-width: 230px; }
+.toolbar input:focus, .toolbar select:focus { border-color: #4c9aff; outline: none; }
+.plan-select { font-weight: 600; color: #0052cc; }
+.badge-approved { color: #006644; background: #abf5d1; padding: 4px 10px; border-radius: 4px; font-weight: 600; }
+
+/* --- subtoolbar над таблицей --- */
+.grid-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.grid-subtoolbar {
+  display: flex; gap: 16px; align-items: center; padding: 4px 12px;
+  background: #fafbfc; border-bottom: 1px solid #ebecf0; flex: 0 0 auto; font-size: 12px;
+}
+
+.toast {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  background: #172b4d; color: #fff; padding: 8px 18px; border-radius: 3px; z-index: 50;
+  font-size: 13px; box-shadow: 0 4px 12px rgba(9,30,66,.3);
+}
+
+/* --- grid --- */
+.grid-scroll { flex: 1 1 auto; overflow: auto; min-height: 0; }
+table.grid { border-collapse: collapse; width: max-content; }
+table.grid th, table.grid td {
+  border: 1px solid #ebecf0; padding: 3px 6px; white-space: nowrap;
+  max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+}
+table.grid thead th {
+  position: sticky; top: 0; z-index: 5; background: #0052cc; color: #fff;
+  font-weight: 600; font-size: 12px; text-align: left; vertical-align: bottom;
+}
+table.grid thead th.sortable { cursor: pointer; user-select: none; }
+table.grid thead th.sortable:hover { background: #0747a6; }
+table.grid thead th.col-plat {
+  background: #00875a; writing-mode: vertical-rl; transform: rotate(180deg);
+  max-width: 28px; height: 120px; text-align: left;
+}
+table.grid thead th.col-ebsp { background: #0747a6; }
+table.grid thead th.col-max { background: #5243aa; }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.col-key { min-width: 118px; }
+.col-summary { max-width: 340px; min-width: 230px; white-space: normal; }
+.col-bu { max-width: 130px; }
+.col-goal { max-width: 150px; }
+.col-zone select { width: 100%; padding: 2px 4px; font-size: 12px; border: 1px solid #dfe1e6; border-radius: 3px; }
+.col-plat { width: 30px; min-width: 30px; text-align: center; color: #42526e; }
+.plat-filled { background: #abf5d1; font-weight: 600; color: #006644; }
+
+.jira-key { color: #0052cc; font-weight: 600; }
+.jira-key.big { font-size: 16px; text-decoration: none; }
+.warn { margin-left: 4px; color: #ff8b00; }
+
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: #f4f5f7; }
+tr.row-committed td { background: #e3fcef; }
+tr.row-underestimated td { background: #fffae6; }
+tr:hover.row-committed td, tr:hover.row-underestimated td { filter: brightness(.97); }
+
+/* группы по колодцам (обычная строка-заголовок, без горизонтального прилипания) */
+tr.group-head td {
+  background: #dfe7f5; font-weight: 600; padding: 5px 10px;
+  border-top: 2px solid #0052cc;
+}
+.group-name { color: #0052cc; margin-right: 16px; font-size: 13px; }
+.group-stat { color: #42526e; margin-right: 16px; font-weight: 500; font-size: 12px; }
+.empty-group { color: #9aa5b1; text-align: center; padding: 8px; }
+.empty { text-align: center; color: #6b778c; padding: 30px; }
+
+/* кнопка +/- в строке */
+.pm {
+  width: 18px; height: 18px; padding: 0; margin-right: 4px; line-height: 1;
+  border-radius: 3px; font-weight: 700; font-size: 13px; vertical-align: middle;
+}
+.pm.plus { color: #006644; border-color: #abf5d1; }
+.pm.minus { color: #bf2600; border-color: #ffbdad; }
+
+.badge { font-size: 11px; padding: 1px 7px; border-radius: 6px; background: #dfe1e6; margin-left: 8px; }
+.badge-pi { background: #deebff; color: #0747a6; }
+.badge-enabler { background: #e3fcef; color: #006644; }
+.chip { font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; }
+.chip.warn { background: #fff0b3; color: #974f00; }
+
+/* --- нижние вкладки-метаспринты --- */
+.sheet-tabs {
+  display: flex; gap: 2px; align-items: stretch; padding: 0 8px;
+  background: #ebecf0; border-top: 1px solid #c1c7d0; flex: 0 0 auto; height: 32px; overflow-x: auto;
+}
+.tab {
+  border: 1px solid #c1c7d0; border-bottom: none; background: #f4f5f7; padding: 0 14px;
+  font-size: 12px; color: #42526e; cursor: pointer; white-space: nowrap; align-self: flex-end; height: 26px;
+}
+.tab-active { background: #fff; color: #0052cc; font-weight: 600; height: 30px; border-top: 2px solid #0052cc; }
+.tab-approved { color: #006644; }
+
+/* --- модалка карточки задачи --- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(9,30,66,.54); z-index: 100;
+  display: grid; place-items: center;
+}
+.modal {
+  background: #fff; border-radius: 6px; width: min(920px, 94vw); max-height: 90vh;
+  display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(9,30,66,.4);
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid #dfe1e6;
+}
+.modal-head .x { border: none; font-size: 16px; padding: 4px 8px; }
+.modal-body { display: flex; gap: 18px; padding: 16px 18px; overflow: auto; }
+.modal-body .col { flex: 1 1 0; display: flex; flex-direction: column; gap: 10px; }
+.col-platforms { flex: 0 0 240px; border-left: 1px solid #ebecf0; padding-left: 16px; }
+.col-title { font-weight: 600; color: #42526e; margin-bottom: 4px; }
+.f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #6b778c; }
+.f input, .f textarea {
+  padding: 6px 8px; border: 1px solid #dfe1e6; border-radius: 4px; font-size: 13px; color: #172b4d;
+  font-family: inherit;
+}
+.f input:focus, .f textarea:focus { border-color: #4c9aff; outline: none; }
+.f input:disabled, .f textarea:disabled { background: #fafbfc; color: #42526e; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.readonly-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #42526e; padding: 2px 0; }
+.plat-edit { display: flex; flex-direction: column; gap: 4px; max-height: 52vh; overflow: auto; }
+.plat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.plat-row input { width: 64px; padding: 4px 6px; border: 1px solid #dfe1e6; border-radius: 4px; text-align: right; }
+.modal-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid #dfe1e6; }
+
+/* --- метаспринт-селектор в шапке --- */
+.ms-label { font-size: 12px; color: #deebff; }
+.ms-select { padding: 6px 10px; border-radius: 4px; border: 1px solid #0747a6; font-weight: 600; color: #172b4d; }
+.topbar .hb { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.3); }
+.topbar .hb:hover { background: rgba(255,255,255,.25); }
+.topbar .search { min-width: 200px; padding: 6px 8px; border-radius: 4px; border: 1px solid #0747a6; }
+
+/* --- тулбар плана (заливка/заметки/проверки) --- */
+.plan-toolbar {
+  display: flex; gap: 14px; align-items: center; padding: 6px 12px; flex-wrap: wrap;
+  background: #fafbfc; border-bottom: 1px solid #ebecf0; flex: 0 0 auto;
+}
+.tb-group { display: flex; gap: 5px; align-items: center; }
+.tb-label { font-size: 12px; color: #6b778c; }
+.plan-toolbar select, .plan-toolbar input[type=color] { padding: 3px; border: 1px solid #dfe1e6; border-radius: 4px; height: 26px; }
+.plan-toolbar button.on { background: #0052cc; color: #fff; border-color: #0052cc; }
+.swatch { width: 20px; height: 20px; border: 1px solid #c1c7d0; border-radius: 4px; padding: 0; cursor: pointer; }
+.swatch.active { outline: 2px solid #0052cc; outline-offset: 1px; }
+.swatch.none { background: repeating-linear-gradient(45deg,#fff,#fff 4px,#ffd5d5 4px,#ffd5d5 6px); }
+.swatch.sm { width: 15px; height: 15px; }
+button.mini { padding: 1px 7px; font-size: 11px; }
+button.mini.on { background: #0052cc; color: #fff; border-color: #0052cc; }
+
+/* колонка-чекбокс выбора (sticky слева от Key) */
+.col-sel { width: 26px; min-width: 26px; text-align: center; }
+
+tr.sort-extra th { background: #eef1f6; text-align: left; padding: 2px 8px; }
+tr.sort-extra .mini { margin-left: 6px; }
+
+/* строки-заметки */
+tr.note-row td { background: #fffdf2; }
+.note-tag { font-size: 10px; color: #b9770f; background: #fff0b3; padding: 0 5px; border-radius: 3px; }
+.note-cell { white-space: normal; }
+.note-edit { display: flex; gap: 6px; align-items: center; }
+.note-input { flex: 1 1 auto; padding: 3px 6px; border: 1px solid #dfe1e6; border-radius: 4px; }
+.note-input.b, .b { font-weight: 700; }
+
+tfoot .grid-total td { position: sticky; bottom: 0; background: #eef1f6; font-weight: 600; border-top: 2px solid #0052cc; }
+
+/* --- автовыгрузка --- */
+.auto-badge { font-size: 12px; color: #0052cc; font-weight: 600; }
+.target-plan { font-size: 12px; background: #e3fcef; color: #006644; padding: 3px 10px; border-radius: 4px; }
+.target-plan.no-target { background: #fff0b3; color: #974f00; }
+
+/* --- вкладки: автовыгрузка + планы --- */
+.tab-auto { color: #0052cc; font-weight: 600; }
+.tab-sep { width: 1px; background: #c1c7d0; align-self: stretch; margin: 4px 4px 0; }
+.tab-add { color: #00875a; font-weight: 600; }
+.tab-approve { color: #fff; background: #00875a; border-color: #00875a; font-weight: 600; align-self: center; height: 24px; border-radius: 4px; }
+.tab-approvedbadge { color: #006644; align-self: center; font-size: 12px; }
+.tab-approved { color: #006644; }
+
+/* --- доводка №4: меню колонок, попап проверок, нижняя панель, почта --- */
+.cols-menu { position: relative; }
+.cols-dropdown {
+  position: absolute; top: 32px; right: 0; z-index: 60; background: #fff; color: #172b4d;
+  border: 1px solid #c1c7d0; border-radius: 6px; box-shadow: 0 6px 20px rgba(9,30,66,.25);
+  padding: 8px; min-width: 210px; max-height: 60vh; overflow: auto;
+}
+.cols-actions { display: flex; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid #ebecf0; margin-bottom: 6px; }
+.cols-item { display: flex; gap: 8px; align-items: center; padding: 3px 4px; font-size: 13px; cursor: pointer; border-radius: 4px; }
+.cols-item:hover { background: #f4f5f7; }
+
+.check-wrap { position: relative; }
+.check-pop {
+  position: absolute; bottom: 34px; left: 0; z-index: 60; background: #fff; color: #172b4d;
+  border: 1px solid #c1c7d0; border-radius: 6px; box-shadow: 0 6px 20px rgba(9,30,66,.25);
+  padding: 10px; width: 250px; display: flex; flex-direction: column; gap: 8px;
+}
+.cp-title { font-weight: 600; font-size: 12px; }
+.cp-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.cp-row select { flex: 1 1 auto; padding: 4px; border: 1px solid #dfe1e6; border-radius: 4px; }
+.cp-actions { display: flex; gap: 6px; }
+.pm.note { color: #5243aa; border-color: #e6d5ff; }
+
+.user-email { color: #fff; font-weight: 600; }
+.role-badge { background: rgba(255,255,255,.2); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+
+.bottom { flex: 0 0 auto; border-top: 1px solid #c1c7d0; background: #ebecf0; }
+.ms-row, .plan-row { display: flex; gap: 4px; align-items: center; padding: 4px 10px; overflow-x: auto; }
+.plan-row { background: #f4f5f7; border-top: 1px solid #dfe1e6; }
+.row-label { font-size: 11px; color: #6b778c; margin-right: 4px; white-space: nowrap; }
+.bottom .tab {
+  border: 1px solid #c1c7d0; background: #fff; padding: 4px 12px; font-size: 12px; color: #42526e;
+  cursor: pointer; white-space: nowrap; border-radius: 4px; height: 26px; display: inline-flex; align-items: center; gap: 6px;
+}
+.bottom .tab-active { background: #0052cc; color: #fff; border-color: #0052cc; font-weight: 600; }
+.bottom .tab-auto { color: #0052cc; }
+.bottom .tab-auto.tab-active { color: #fff; }
+.tab-del { color: #bf2600; border-color: #ffbdad; }
+.plan-tab .st { font-size: 10px; padding: 0 6px; border-radius: 8px; }
+.st-draft { background: #fff0b3; color: #974f00; }
+.st-approved { background: #abf5d1; color: #006644; }
+.st-archived { background: #dfe1e6; color: #6b778c; }
+.plan-tab.tab-active .st { background: rgba(255,255,255,.25); color: #fff; }
+
+/* --- доводка №10: колонки больше НЕ заморожены (наслаивание убрано) --- */
+/* Ширину колонок диктует <colgroup>; ячейки не держат свою min/max-width. */
+.grid--fixed th, .grid--fixed td { min-width: 0; max-width: none; }
+.grid--frozen td.col-summary { white-space: normal; }
+
+/* ручка перетаскивания */
+.drag-h { cursor: grab; color: #97a0af; margin-right: 3px; user-select: none; font-weight: 700; }
+.drag-h:active { cursor: grabbing; }
+tr.dragging td { opacity: .5; }
+
+/* селектор статуса в нижней панели */
+.status-pick { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #6b778c; }
+.status-pick select { padding: 3px 6px; border: 1px solid #c1c7d0; border-radius: 4px; font-size: 12px; }
+
+.lock-note { color: #974f00; background: #fff0b3; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+.readonly-note { margin-left: 10px; font-size: 11px; }
+
+/* поля карточки (две колонки) */
+.modal-body .ff { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #6b778c; margin-bottom: 8px; }
+.modal-body .ff input, .modal-body .ff select, .modal-body .ff textarea {
+  padding: 6px 8px; border: 1px solid #dfe1e6; border-radius: 4px; font-size: 13px; color: #172b4d; font-family: inherit;
+}
+.modal-body .ff input:disabled, .modal-body .ff select:disabled, .modal-body .ff textarea:disabled { background: #fafbfc; }
+
+/* --- доводка №6: попап вниз, ресайз, кисть, заметки-textarea --- */
+.check-pop.down { top: 34px; bottom: auto; }
+
+/* table-layout fixed для точных ширин и ресайза */
+table.grid--fixed { table-layout: fixed; }
+table.grid--fixed th, table.grid--fixed td { overflow: hidden; text-overflow: ellipsis; }
+table.grid--fixed td.col-summary, table.grid--fixed td.note-cell { white-space: normal; }
+
+/* ручка ресайза на правой границе шапки. Шапка остаётся sticky (top+left),
+   sticky сама по себе позиционирована — .rsz (absolute) держится относительно th. */
+.rsz { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; z-index: 9; }
+.rsz:hover { background: rgba(255,255,255,.4); }
+table.grid thead th .sortable { cursor: pointer; }
+/* высота шапки: 30px по умолчанию; платформенные колонки задают свою высоту вертикальным текстом */
+table.grid--fixed thead th { height: 30px; }
+table.grid--fixed thead th.col-plat { height: 120px; }
+
+/* кисть */
+.grid-scroll.brush { cursor: crosshair; user-select: none; }
+.swatch-wrap { position: relative; display: inline-flex; }
+.swatch-wrap .swatch { width: 20px; height: 20px; }
+.swatch-wrap input[type=color] { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border: none; padding: 0; background: none; cursor: pointer; opacity: .8; }
+.swatch-wrap.active .swatch { outline: 2px solid #0052cc; outline-offset: 1px; }
+
+/* заметка-строка с авто-высотой */
+.note-area { width: 100%; min-height: 24px; resize: none; overflow: hidden; padding: 4px 6px;
+  border: 1px solid #dfe1e6; border-radius: 4px; font-family: inherit; font-size: 13px; line-height: 1.4; }
+.note-area.b { font-weight: 700; }
+tr.note-row td { vertical-align: top; }
+
+/* --- доводка №7: ИТОГО сверху, заметка-текст, переименование вкладок --- */
+.plan-total {
+  flex: 0 0 auto; padding: 5px 14px; background: #eef1f6; border-bottom: 1px solid #dfe1e6;
+  font-size: 13px; color: #172b4d;
+}
+.plan-total b { color: #0052cc; }
+.note-text { display: block; min-height: 18px; cursor: text; }
+.note-cell { cursor: text; }
+.tab-rename { padding: 4px 8px; border: 2px solid #0052cc; border-radius: 4px; font-size: 12px; min-width: 120px; height: 26px; }
+
+/* ===================== доводка №8 ===================== */
+:root {
+  --jira-blue: #0052cc; --jira-blue-hover: #0747a6;
+  --jira-bg: #f4f5f7; --jira-border: #dfe1e6; --jira-text: #172b4d; --jira-subtle: #42526e;
+}
+
+/* кнопки в стиле Jira (плоские, скруглённые) */
+button { border-radius: 3px; transition: background .1s; }
+button.primary { background: var(--jira-blue); border-color: var(--jira-blue); }
+button.primary:hover:not(:disabled) { background: var(--jira-blue-hover); }
+.bottom .tab { border-radius: 3px; }
+.bottom .tab-active { background: var(--jira-blue); border-color: var(--jira-blue); }
+.hb { border-radius: 3px; }
+
+/* --- столбцы «спринты по платформам» (AN..BD): фиолетовая шапка, отличие от зелёных оценок --- */
+table.grid thead th.col-sprint { background: #5243aa; }
+table.grid thead th.col-sprint .rsz:hover { background: rgba(255,255,255,.4); }
+.col-sprint.plat-filled { background: #eae6ff; color: #403294; font-weight: 600; }
+
+/* --- кисть: кнопка удаления цвета на свотче --- */
+.swatch-del {
+  position: absolute; top: -7px; right: -7px; width: 14px; height: 14px; padding: 0;
+  line-height: 12px; font-size: 11px; text-align: center; border-radius: 50%;
+  border: 1px solid #c1c7d0; background: #fff; color: #bf2600; cursor: pointer;
+  display: none;
+}
+.swatch-wrap:hover .swatch-del { display: block; }
+.swatch-del:hover { background: #ffebe6; }
+
+/* --- модалка заметки --- */
+.modal--note { width: min(620px, 92vw); }
+.modal-title { font-weight: 600; font-size: 15px; color: var(--jira-text); }
+.note-modal-body { padding: 14px 18px; }
+.note-modal-area {
+  width: 100%; min-height: 220px; resize: vertical; padding: 10px 12px;
+  border: 1px solid var(--jira-border); border-radius: 4px; font-family: inherit; font-size: 14px; line-height: 1.5;
+}
+.note-modal-area:focus { border-color: #4c9aff; outline: none; }
+
+/* --- карточка задачи в стиле Jira: вкладки + вертикальная форма --- */
+.modal--jira { width: min(680px, 94vw); }
+.jira-tabs {
+  display: flex; gap: 0; padding: 0 18px; border-bottom: 2px solid var(--jira-border);
+  background: #fff; overflow-x: auto; flex: 0 0 auto;
+}
+.jira-tab {
+  border: none; background: none; padding: 10px 14px; font-size: 13px; color: var(--jira-subtle);
+  border-bottom: 2px solid transparent; margin-bottom: -2px; border-radius: 0; white-space: nowrap;
+}
+.jira-tab:hover { background: #f4f5f7; }
+.jira-tab.active { color: var(--jira-blue); border-bottom-color: var(--jira-blue); font-weight: 600; }
+.jira-form { padding: 16px 18px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.jff { display: flex; flex-direction: column; gap: 4px; }
+.jff-label { font-size: 12px; font-weight: 600; color: var(--jira-subtle); }
+.jff input, .jff select, .jff textarea {
+  padding: 7px 9px; border: 1px solid var(--jira-border); border-radius: 4px; font-size: 13px;
+  color: var(--jira-text); font-family: inherit; background: #fff;
+}
+.jff input:focus, .jff select:focus, .jff textarea:focus { border-color: #4c9aff; outline: none; box-shadow: 0 0 0 2px rgba(76,154,255,.25); }
+.jff input:disabled, .jff select:disabled, .jff textarea:disabled { background: #fafbfc; color: var(--jira-subtle); }
+.jff-hint { font-size: 11px; color: #6b778c; }
+.jff-ro { padding: 7px 9px; background: #fafbfc; border: 1px solid #ebecf0; border-radius: 4px; font-size: 13px; color: var(--jira-text); min-height: 20px; }
+.jff-section { font-weight: 700; color: var(--jira-blue); font-size: 12px; margin-top: 6px; text-transform: uppercase; letter-spacing: .03em; }
+.jira-plat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.jff--inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.jff--inline .jff-label { font-weight: 400; }
+.jff--inline input { width: 80px; text-align: right; }
+
+/* модалка velocity платформ */
+.modal--velocity { width: min(520px, 94vw); }
+.velocity-body { padding: 14px 18px; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }

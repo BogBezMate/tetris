@@ -1,0 +1,40 @@
+# --- секреты ---
+.env
+backend/.env
+frontend/.env
+*.local
+response_example.json
+
+# --- Python ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node / frontend ---
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- IDE / OS ---
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- рабочие материалы, не для репозитория ---
+Recording*.txt
+*.drawio
+*.drawio.bkp
+.$*
+Макет*.xlsx
+fields.json
+gen_drawio.py
+PROJECT_CONTEXT.md
+Описание_*.md
+Диаграмма_*.md
+Роадмап.md
