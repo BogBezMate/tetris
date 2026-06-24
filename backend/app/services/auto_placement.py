@@ -34,13 +34,28 @@ def _zone_for_labels(labels: list[str]) -> str:
     return DEFAULT_ZONE
 
 
+def zone_for(labels: list[str], has_active_sprint: bool = False) -> str:
+    """Колодец задачи. Приоритет: метка MetaSprint/AlphaSprint; если метки нет, но есть
+    активный спринт (state=ACTIVE) → OpenSprint; иначе To be allocated.
+    (Если у задачи есть и метка meta/alpha, и активный спринт — берём метку.)"""
+    zone = _zone_for_labels(labels)
+    if zone != DEFAULT_ZONE:
+        return zone
+    if has_active_sprint:
+        return "OpenSprint"
+    return DEFAULT_ZONE
+
+
 class AutoPlacementService:
     def __init__(self, db: Session):
         self.db = db
         self._zones = {z.zone_name: z.zone_id for z in db.scalars(select(Zone)).all()}
 
     def zone_id_for(self, task: Task) -> int:
-        zone_name = _zone_for_labels([lbl.label_name for lbl in task.labels])
+        zone_name = zone_for(
+            [lbl.label_name for lbl in task.labels],
+            getattr(task, "has_active_sprint", False),
+        )
         return self._zones.get(zone_name) or self._zones[DEFAULT_ZONE]
 
     def place(self, tasks: list[Task]) -> dict[int, int]:

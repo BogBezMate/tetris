@@ -49,6 +49,7 @@ def upsert_parsed_task(db: Session, parsed: ParsedTask, platform_ids: dict[str, 
     task.contractor_cost_rub = parsed.contractor_cost_rub
     task.coefficient = parsed.coefficient
     task.current_sprint = parsed.current_sprint
+    task.has_active_sprint = parsed.has_active_sprint
     task.end_date = parsed.end_date
     task.baseline_end_date = parsed.baseline_end_date
     task.jira_updated_at = parsed.jira_updated_at

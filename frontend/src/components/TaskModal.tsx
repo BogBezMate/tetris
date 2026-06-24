@@ -8,6 +8,8 @@ interface Props {
   estimates: Record<string, number>;
   platforms: PlatformRef[];
   canEdit: boolean;
+  planId?: number | null;
+  overridden?: number[];
   onClose: () => void;
   onSaved: () => void;
   flash: (m: string) => void;
@@ -15,7 +17,7 @@ interface Props {
 
 type Tab = "biz" | "tech" | "prio" | "done";
 
-export function TaskModal({ task: t, estimates: est, platforms, canEdit, onClose, onSaved, flash }: Props) {
+export function TaskModal({ task: t, estimates: est, platforms, canEdit, planId, overridden = [], onClose, onSaved, flash }: Props) {
   const [goalTypes, setGoalTypes] = useState<GoalType[]>([]);
   const [tab, setTab] = useState<Tab>("biz");
   const [form, setForm] = useState({
@@ -46,6 +48,18 @@ export function TaskModal({ task: t, estimates: est, platforms, canEdit, onClose
     for (const p of platforms) { const v = est[String(p.platform_id)]; if (v) init[p.platform_id] = String(v); }
     return init;
   });
+  // остаток SP в рамках плана (override). Заполнен только для платформ, где уже задан остаток.
+  const inPlan = planId != null;
+  const [planEst, setPlanEst] = useState<Record<number, string>>(() => {
+    const init: Record<number, string> = {};
+    for (const p of platforms) {
+      if (overridden.includes(p.platform_id)) {
+        const v = est[String(p.platform_id)];
+        if (v != null) init[p.platform_id] = String(v);
+      }
+    }
+    return init;
+  });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { api.goalTypes().then(setGoalTypes).catch(() => {}); }, []);
@@ -57,7 +71,7 @@ export function TaskModal({ task: t, estimates: est, platforms, canEdit, onClose
     setBusy(true);
     try {
       const goal = goalTypes.find((g) => g.goal_type_name === form.goal_type_name);
-      await api.updateTask(t.task_id, {
+      const body: Record<string, unknown> = {
         jira_key: form.jira_key || null,
         task_summary: form.task_summary || null,
         business_unit: form.business_unit || null,
@@ -79,10 +93,29 @@ export function TaskModal({ task: t, estimates: est, platforms, canEdit, onClose
         baseline_end_date: form.baseline_end_date || null,
         dod_text: form.dod_text || null,
         max_sprints_override: num(form.max_sprints_override),
-        platform_estimates: platforms
+      };
+      // Базовую оценку из Jira правим только вне плана (в автовыгрузке).
+      // В плане оценки трогаем как «остаток плана» (отдельный вызов), Jira-оценку не перезаписываем.
+      if (!inPlan) {
+        body.platform_estimates = platforms
           .filter((p) => estimates[p.platform_id] !== undefined)
-          .map((p) => ({ platform_id: p.platform_id, estimate_story_points: num(estimates[p.platform_id] ?? "") })),
-      });
+          .map((p) => ({ platform_id: p.platform_id, estimate_story_points: num(estimates[p.platform_id] ?? "") }));
+      }
+      await api.updateTask(t.task_id, body);
+
+      if (inPlan && planId != null) {
+        // остаток плана: значение → число; пусто, но раньше было override → сброс к Jira (null)
+        const items = platforms
+          .map((p) => {
+            const raw = (planEst[p.platform_id] ?? "").trim();
+            if (raw !== "") return { platform_id: p.platform_id, estimate_sp: Number(raw) };
+            if (overridden.includes(p.platform_id)) return { platform_id: p.platform_id, estimate_sp: null };
+            return null;
+          })
+          .filter(Boolean) as { platform_id: number; estimate_sp: number | null }[];
+        if (items.length) await api.savePlanEstimates(planId, t.task_id, items);
+      }
+
       flash("Сохранено в базу");
       onSaved();
       onClose();
@@ -169,16 +202,48 @@ export function TaskModal({ task: t, estimates: est, platforms, canEdit, onClose
               {ro("Платформы (нужны)", t.platforms_required ?? "—")}
               {field("Story Points (итого)", "total_story_points", "number")}
               {field("МАКСИМУМ спринтов", "max_sprints_override", "number", "0 или пусто — считается автоматически по оценкам платформ")}
-              <div className="jff-section">Оценки по платформам (SP)</div>
-              <div className="jira-plat-grid">
-                {platforms.map((p) => (
-                  <label key={p.platform_id} className="jff jff--inline">
-                    <span className="jff-label">Оценка {p.platform_name}</span>
-                    <input type="number" value={estimates[p.platform_id] ?? ""} disabled={!canEdit}
-                           onChange={(e) => setEstimates({ ...estimates, [p.platform_id]: e.target.value })} />
-                  </label>
-                ))}
-              </div>
+              {!inPlan && (
+                <>
+                  <div className="jff-section">Оценки по платформам (SP)</div>
+                  <div className="jira-plat-grid">
+                    {platforms.map((p) => (
+                      <label key={p.platform_id} className="jff jff--inline">
+                        <span className="jff-label">Оценка {p.platform_name}</span>
+                        <input type="number" value={estimates[p.platform_id] ?? ""} disabled={!canEdit}
+                               onChange={(e) => setEstimates({ ...estimates, [p.platform_id]: e.target.value })} />
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+              {inPlan && (
+                <>
+                  <div className="jff-section">Остаток SP в этом плане
+                    <span className="jff-hint"> — переопределяет оценку из Jira только для текущего плана. Пусто = берётся оценка Jira.</span>
+                  </div>
+                  <div className="jira-plat-grid">
+                    {platforms.map((p) => {
+                      // базовая оценка из Jira: для overridden платформ берём её из task_platforms,
+                      // а merged-значение (с остатком) сюда не приходит — показываем как placeholder
+                      const jira = !overridden.includes(p.platform_id) ? est[String(p.platform_id)] : undefined;
+                      const isOver = overridden.includes(p.platform_id);
+                      return (
+                        <label key={p.platform_id} className={`jff jff--inline${isOver ? " jff--override" : ""}`}>
+                          <span className="jff-label">{p.platform_name}{isOver ? " (изменено)" : ""}</span>
+                          <input type="number"
+                                 placeholder={jira != null ? `Jira: ${jira}` : "нет в Jira"}
+                                 value={planEst[p.platform_id] ?? ""} disabled={!canEdit}
+                                 onChange={(e) => setPlanEst({ ...planEst, [p.platform_id]: e.target.value })} />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {canEdit && (
+                    <button className="link-reset" onClick={() => setPlanEst({})}
+                            title="Очистить остатки — при сохранении вернётся оценка из Jira">↺ Сбросить остатки к Jira</button>
+                  )}
+                </>
+              )}
             </>
           )}
 
@@ -208,7 +273,7 @@ export function TaskModal({ task: t, estimates: est, platforms, canEdit, onClose
         </div>
 
         <div className="modal-foot">
-          {canEdit && <button onClick={sync} disabled={busy} title="Отправить изменения в Jira (заглушка)">⟳ Синхронизировать с Jira</button>}
+          {canEdit && <button onClick={sync} disabled={busy} title="Запись изменений обратно в Jira появится на этапе 12 (живой вебхук). Сейчас это заглушка — в Jira ничего не отправляется.">⟳ Запись в Jira (этап 12)</button>}
           <span className="spacer" />
           {!canEdit && <span className="lock-note">🔒 только просмотр</span>}
           <button onClick={onClose}>Отменить</button>

@@ -34,6 +34,10 @@ export interface TaskRanked {
   adjusted_annual_effect: number;
   ebitda_per_story_point: number;
   is_underestimated: boolean;
+  is_unplatformed: boolean;
+  has_estimate_no_team: boolean;
+  has_unselected_estimate: boolean;
+  has_active_sprint: boolean;
   max_sprints: number;
   max_sprints_override: number | null;
 }
@@ -50,6 +54,7 @@ export interface GridRow {
   plan_item_id: number | null;
   item_position: number;
   platform_estimates: Record<string, number>;
+  overridden_platforms?: number[];
 }
 
 export interface Grid {
@@ -58,6 +63,15 @@ export interface Grid {
   zones: Zone[];
   rows: GridRow[];
   presentation: Presentation | null;
+  velocity_per_meta?: Record<string, number>;
+}
+
+export interface QuarterVelocity {
+  platform_id: number;
+  platform_name: string;
+  capacity_sp: number | null;
+  sp_per_sprint: number | null;        // делитель этого метаспринта (null = дефолт)
+  sp_per_sprint_default: number;       // глобальный дефолт (для placeholder)
 }
 
 export interface AutoRow {

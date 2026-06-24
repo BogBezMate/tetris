@@ -17,18 +17,21 @@ from app.schemas import (
     GridOut,
     GridRow,
     PlanCreate,
+    PlanEstimatesIn,
     PlanItemOut,
     PlanOut,
     PlatformRef,
     PresentationIn,
     QuarterCreate,
     QuarterOut,
+    QuarterVelocityIn,
+    QuarterVelocityOut,
     ReorderIn,
     SavePlacementRequest,
     TaskRankedOut,
     ZoneOut,
 )
-from app.services.auto_placement import _zone_for_labels
+from app.services.auto_placement import zone_for
 from app.services.plan_service import PlanService
 from app.services.task_service import TaskService
 
@@ -76,6 +79,24 @@ def delete_quarter(quarter_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+@router.get("/quarters/{quarter_id}/velocity", response_model=list[QuarterVelocityOut])
+def get_quarter_velocity(quarter_id: int, db: Session = Depends(get_db),
+                         _: User = Depends(get_current_user)):
+    """Velocity per Meta: ёмкость каждой платформы в этом метаспринте (SP)."""
+    return PlanService(db).quarter_velocities(quarter_id)
+
+
+@router.put("/quarters/{quarter_id}/velocity", response_model=list[QuarterVelocityOut])
+def set_quarter_velocity(quarter_id: int, items: list[QuarterVelocityIn],
+                         db: Session = Depends(get_db), _: User = Depends(require_editor)):
+    svc = PlanService(db)
+    try:
+        svc.save_quarter_velocities(quarter_id, items)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    return svc.quarter_velocities(quarter_id)
+
+
 @router.get("/plans", response_model=list[PlanOut])
 def list_plans(quarter_id: int | None = None, db: Session = Depends(get_db),
                _: User = Depends(get_current_user)):
@@ -86,6 +107,16 @@ def list_plans(quarter_id: int | None = None, db: Session = Depends(get_db),
 def create_plan(data: PlanCreate, db: Session = Depends(get_db),
                 user: User = Depends(require_editor)):
     return PlanService(db).create_plan(data.quarter_id, data.plan_name, user.user_id)
+
+
+@router.post("/plans/{plan_id}/duplicate", response_model=PlanOut)
+def duplicate_plan(plan_id: int, db: Session = Depends(get_db),
+                   user: User = Depends(require_editor)):
+    """Создать новый план на основе существующего (с задачами, раскладкой, остатками)."""
+    try:
+        return PlanService(db).duplicate_plan(plan_id, user.user_id)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
 
 
 @router.put("/plans/{plan_id}/rename", response_model=PlanOut)
@@ -179,20 +210,30 @@ def plan_grid(plan_id: int, db: Session = Depends(get_db),
     if not plan:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "План не найден")
 
-    estimates = svc.platform_estimates()
-    rows = [
-        GridRow(
-            task=TaskRankedOut.model_validate(r),
-            platform_estimates=estimates.get(r.task_id, {}),
+    zones = [ZoneOut.model_validate(z) for z in svc.zones()]
+
+    # Утверждённый/архивный план показываем ИЗ СНИМКА (историчность) — данные заморожены
+    # на момент утверждения, обновления Jira на него не влияют.
+    snap = plan.approved_snapshot
+    if plan.plan_status in ("approved", "archived") and snap:
+        return GridOut(
+            plan=PlanOut.model_validate(plan),
+            platforms=[PlatformRef(**p) for p in snap.get("platforms", [])],
+            zones=zones,
+            rows=[GridRow(**r) for r in snap.get("rows", [])],
+            presentation=plan.presentation,
+            velocity_per_meta=snap.get("velocity_per_meta", {}),
         )
-        for r in svc.plan_tasks(plan_id)
-    ]
+
+    # Черновик (или approved без снимка — старые планы) — живые данные.
+    rows, platforms_out, velocity = svc.compute_grid(plan)
     return GridOut(
         plan=PlanOut.model_validate(plan),
-        platforms=[PlatformRef.model_validate(p) for p in svc.platforms()],
-        zones=[ZoneOut.model_validate(z) for z in svc.zones()],
+        platforms=platforms_out,
+        zones=zones,
         rows=rows,
         presentation=plan.presentation,
+        velocity_per_meta=velocity,
     )
 
 
@@ -235,6 +276,23 @@ def reorder_plan(plan_id: int, data: ReorderIn, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+@router.put("/plans/{plan_id}/tasks/{task_id}/estimates")
+def save_plan_estimates(plan_id: int, task_id: int, data: PlanEstimatesIn,
+                        db: Session = Depends(get_db), user: User = Depends(require_editor)):
+    """Остаточные оценки задачи по платформам в рамках плана.
+
+    estimate_sp = null по платформе → сброс к Jira (удалить переопределение).
+    """
+    svc = PlanService(db)
+    if not svc.get_plan(plan_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "План не найден")
+    try:
+        svc.save_plan_estimates(plan_id, task_id, data.items)
+    except PermissionError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    return {"ok": True}
+
+
 @router.put("/plans/{plan_id}/status", response_model=PlanOut)
 def set_plan_status(plan_id: int, value: str, db: Session = Depends(get_db),
                     user: User = Depends(require_editor)):
@@ -269,7 +327,7 @@ def autovygruzka(plan_id: int | None = None, db: Session = Depends(get_db),
     rows = [
         AutoRow(
             task=TaskRankedOut.model_validate(r),
-            zone_name=_zone_for_labels((r.labels or "").split(", ") if r.labels else []),
+            zone_name=zone_for((r.labels or "").split(", ") if r.labels else [], r.has_active_sprint),
             in_plan=r.task_id in in_plan,
             platform_estimates=estimates.get(r.task_id, {}),
         )

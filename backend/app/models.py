@@ -81,6 +81,8 @@ class Task(Base):
     coefficient: Mapped[str | None] = mapped_column(String(50))
 
     current_sprint: Mapped[str | None] = mapped_column(String(200))
+    # есть ли у задачи спринт со state=ACTIVE → колодец OpenSprint
+    has_active_sprint: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     end_date: Mapped[date | None] = mapped_column(Date)
     baseline_end_date: Mapped[date | None] = mapped_column(Date)
 
@@ -167,6 +169,9 @@ class Quarter(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     plans: Mapped[list[Plan]] = relationship(back_populates="quarter")
+    velocities: Mapped[list[QuarterVelocity]] = relationship(
+        back_populates="quarter", cascade="all, delete-orphan"
+    )
 
 
 class Plan(Base):
@@ -179,6 +184,8 @@ class Plan(Base):
     plan_name: Mapped[str] = mapped_column(String(120))
     plan_status: Mapped[str] = mapped_column(String(20), default="draft")  # draft|approved|archived
     presentation: Mapped[dict | None] = mapped_column(JSON)  # Excel-слой: заливки, заметки
+    # Снимок данных таблицы плана на момент утверждения (историчность). NULL у черновика.
+    approved_snapshot: Mapped[dict | None] = mapped_column(JSON)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -187,6 +194,9 @@ class Plan(Base):
 
     quarter: Mapped[Quarter] = relationship(back_populates="plans")
     items: Mapped[list[PlanItem]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+    estimate_overrides: Mapped[list[PlanTaskEstimate]] = relationship(
         back_populates="plan", cascade="all, delete-orphan"
     )
 
@@ -209,3 +219,48 @@ class PlanItem(Base):
     plan: Mapped[Plan] = relationship(back_populates="items")
     task: Mapped[Task] = relationship()
     zone: Mapped[Zone] = relationship()
+
+
+class QuarterVelocity(Base):
+    """Velocity платформы внутри метаспринта (задаётся вручную). Два числа:
+
+    - capacity_sp — ёмкость за метаспринт (Velocity per Meta); сравнивается со спросом
+      (суммой оценок плана) для подсветки перегруза;
+    - sp_per_sprint — делитель «SP за спринт» для этого метаспринта (колонки «спринты»
+      = оценка ÷ делитель, «МАКС спринтов»). NULL → берётся глобальный Platform.sp_per_sprint.
+    """
+    __tablename__ = "quarter_velocities"
+    __table_args__ = (
+        UniqueConstraint("quarter_id", "platform_id", name="uq_quarter_platform_velocity"),
+    )
+
+    quarter_velocity_id: Mapped[int] = mapped_column(primary_key=True)
+    quarter_id: Mapped[int] = mapped_column(
+        ForeignKey("quarters.quarter_id", ondelete="CASCADE")
+    )
+    platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.platform_id"))
+    capacity_sp: Mapped[float | None] = mapped_column(Numeric(10, 2))
+    sp_per_sprint: Mapped[float | None] = mapped_column(Numeric(6, 2))
+
+    quarter: Mapped[Quarter] = relationship(back_populates="velocities")
+    platform: Mapped[Platform] = relationship()
+
+
+class PlanTaskEstimate(Base):
+    """Остаточная оценка задачи по платформе В РАМКАХ плана.
+
+    Переопределяет оценку из Jira (task_platforms.estimate_story_points) только
+    для конкретного плана. «Сброс к Jira» = удалить эту запись.
+    """
+    __tablename__ = "plan_task_estimates"
+    __table_args__ = (
+        UniqueConstraint("plan_id", "task_id", "platform_id", name="uq_plan_task_platform"),
+    )
+
+    plan_task_estimate_id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.plan_id", ondelete="CASCADE"))
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.task_id", ondelete="CASCADE"))
+    platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.platform_id"))
+    estimate_sp: Mapped[float | None] = mapped_column(Numeric(10, 2))
+
+    plan: Mapped[Plan] = relationship(back_populates="estimate_overrides")

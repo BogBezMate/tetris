@@ -6,8 +6,9 @@ import { Grid } from "./components/Grid";
 import { Autovygruzka } from "./components/Autovygruzka";
 import { TaskModal } from "./components/TaskModal";
 import { ColumnsMenu } from "./components/ColumnsMenu";
-import { VelocityModal } from "./components/VelocityModal";
-import { DEFAULT_HIDDEN } from "./components/columns";
+import { FilterMenu } from "./components/FilterMenu";
+import { MetaVelocityModal } from "./components/MetaVelocityModal";
+import { DEFAULT_HIDDEN, loadFilters, saveFilters, type Filters } from "./components/columns";
 
 type View = "auto" | "plan";
 const HIDDEN_KEY = "tetris_hidden_cols";
@@ -18,6 +19,21 @@ function loadHidden(): Set<string> {
     if (raw) return new Set(JSON.parse(raw));
   } catch { /* ignore */ }
   return new Set(DEFAULT_HIDDEN);
+}
+
+// Запоминаем выбранные метаспринт/план/вкладку (личное, в браузере) — чтобы при F5
+// не выкидывало на новейший метаспринт.
+const NAV_KEY = "tetris_nav";
+interface Nav { metasprintId: number | null; planId: number | null; view: View; }
+function loadNav(): Nav {
+  try {
+    const raw = localStorage.getItem(NAV_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { metasprintId: null, planId: null, view: "auto" };
+}
+function saveNav(nav: Nav) {
+  localStorage.setItem(NAV_KEY, JSON.stringify(nav));
 }
 
 export function App() {
@@ -36,11 +52,14 @@ export function App() {
 
   const [search, setSearch] = useState("");
   const [hidden, setHidden] = useState<Set<string>>(loadHidden);
-  const [openTask, setOpenTask] = useState<{ task: TaskRanked; est: Record<string, number> } | null>(null);
+  const [filters, setFilters] = useState<Filters>(loadFilters);
+  const [openTask, setOpenTask] = useState<{ task: TaskRanked; est: Record<string, number>; planId: number | null; overridden: number[] } | null>(null);
   const [renaming, setRenaming] = useState<{ type: "plan" | "ms"; id: number } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [velocityOpen, setVelocityOpen] = useState(false);
+  const [metaVelocityOpen, setMetaVelocityOpen] = useState(false);
   const saveTimer = useRef<number | null>(null);
+  const navRef = useRef<Nav>(loadNav());        // сохранённый выбор на момент загрузки
+  const restoredRef = useRef(false);            // план/вкладку уже восстановили?
 
   const canEdit = user?.user_role === "editor";
   const currentPlan = plans.find((p) => p.plan_id === planId) ?? null;
@@ -62,6 +81,11 @@ export function App() {
     localStorage.setItem(HIDDEN_KEY, JSON.stringify([...h]));
   }
 
+  function changeFilters(f: Filters) {
+    setFilters(f);
+    saveFilters(f);
+  }
+
   useEffect(() => {
     if (!hasToken()) return setBooting(false);
     api.me().then(setUser).catch(() => setToken(null)).finally(() => setBooting(false));
@@ -69,18 +93,39 @@ export function App() {
 
   useEffect(() => {
     if (!user) return;
-    api.quarters().then((qs) => { setMetasprints(qs); if (qs.length) setMetasprintId(qs[0].quarter_id); });
+    api.quarters().then((qs) => {
+      setMetasprints(qs);
+      if (!qs.length) return;
+      const saved = navRef.current.metasprintId;
+      const valid = saved != null && qs.some((q) => q.quarter_id === saved);
+      setMetasprintId(valid ? saved : qs[0].quarter_id);
+    });
   }, [user]);
 
   useEffect(() => {
     if (metasprintId === null) return;
     api.plans(metasprintId).then((ps) => {
       setPlans(ps);
+      // первый проход после загрузки: восстановить сохранённый план/вкладку
+      const savedPlan = navRef.current.planId;
+      if (!restoredRef.current && savedPlan != null && ps.some((p) => p.plan_id === savedPlan)) {
+        restoredRef.current = true;
+        setPlanId(savedPlan);
+        setView(navRef.current.view);
+        return;
+      }
+      restoredRef.current = true;
       const def = pickDefaultPlan(ps);
       setPlanId(def);
       setView(def ? "plan" : "auto");
     });
   }, [metasprintId]);
+
+  // сохраняем выбор для восстановления при F5 (личное, в браузере)
+  useEffect(() => {
+    if (metasprintId === null) return;
+    saveNav({ metasprintId, planId, view });
+  }, [metasprintId, planId, view]);
 
   function reloadAuto() { api.autovygruzka(planId ?? undefined).then(setAuto); }
   function reloadGrid() {
@@ -121,6 +166,14 @@ export function App() {
     setPlanId(plan.plan_id);
     setView("plan");
     flash(`Создан ${plan.plan_name}`);
+  }
+  async function duplicatePlan() {
+    if (planId === null || !currentPlan) return flash("Сначала выберите план");
+    const plan = await api.duplicatePlan(planId);
+    setPlans(await api.plans(metasprintId ?? undefined));
+    setPlanId(plan.plan_id);
+    setView("plan");
+    flash(`Создан на основе «${currentPlan.plan_name}»: ${plan.plan_name}`);
   }
   async function deletePlan() {
     if (planId === null || !currentPlan) return;
@@ -174,6 +227,17 @@ export function App() {
     return grid.rows.filter((r) => !q || `${r.task.jira_key} ${r.task.task_summary ?? ""}`.toLowerCase().includes(q));
   }, [grid, search]);
 
+  // счётчики по категориям фильтра (по всем задачам активной таблицы, без учёта самих фильтров)
+  const filterCounts = useMemo(() => {
+    const tasks = (view === "auto" ? auto?.rows : grid?.rows)?.map((r) => r.task) ?? [];
+    return {
+      under: tasks.filter((t) => t.is_underestimated).length,
+      unplat: tasks.filter((t) => t.is_unplatformed).length,
+      noteam: tasks.filter((t) => t.has_estimate_no_team).length,
+      unsel: tasks.filter((t) => t.has_unselected_estimate).length,
+    };
+  }, [view, auto, grid]);
+
   const STATUS_RU: Record<string, string> = { draft: "черновик", approved: "утверждён", archived: "архив" };
 
   if (booting) return <div className="center muted">Загрузка…</div>;
@@ -185,7 +249,8 @@ export function App() {
         <div className="brand">Тетрис</div>
         <input className="search" placeholder="Поиск Key / Summary…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <ColumnsMenu hidden={hidden} onChange={changeHidden} />
-        {canEdit && <button className="hb" onClick={() => setVelocityOpen(true)} title="Velocity платформ (SP в спринт)">⚙ SP/спринт</button>}
+        <FilterMenu filters={filters} onChange={changeFilters} counts={filterCounts} />
+        {canEdit && metasprintId !== null && <button className="hb" onClick={() => setMetaVelocityOpen(true)} title="Velocity платформ метаспринта: ёмкость (перегруз) и SP/спринт (делитель для колонок «спринты»)">📊 Velocity метаспринта</button>}
         {canEdit && <button className="hb" onClick={reloadFromJira} title="Перечитать выгрузку">⟳ из Jira</button>}
         <div className="user">
           <span className="user-email" title="Вы вошли как">✉ {user.user_email}</span>
@@ -198,14 +263,14 @@ export function App() {
 
       {view === "auto" ? (
         auto ? (
-          <Autovygruzka data={auto} search={search} hidden={hidden} canEdit={canEdit}
+          <Autovygruzka data={auto} search={search} hidden={hidden} filters={filters} canEdit={canEdit}
                         targetPlan={currentPlan} onAdd={addToPlan}
-                        onOpen={(t) => setOpenTask({ task: t, est: (auto.rows.find((r) => r.task.task_id === t.task_id)?.platform_estimates) ?? {} })} />
+                        onOpen={(t) => setOpenTask({ task: t, est: (auto.rows.find((r) => r.task.task_id === t.task_id)?.platform_estimates) ?? {}, planId: null, overridden: [] })} />
         ) : <div className="center muted">Загрузка…</div>
       ) : grid ? (
-        <Grid grid={grid} rows={filteredGridRows} canEdit={canEditPlan} hidden={hidden}
+        <Grid grid={grid} rows={filteredGridRows} canEdit={canEditPlan} hidden={hidden} filters={filters}
               presentation={present} onPresentation={changePresentation} onRemove={removeFromPlan}
-              onOpen={(t) => setOpenTask({ task: t, est: (grid.rows.find((r) => r.task.task_id === t.task_id)?.platform_estimates) ?? {} })} />
+              onOpen={(t) => setOpenTask({ task: t, est: (grid.rows.find((r) => r.task.task_id === t.task_id)?.platform_estimates) ?? {}, planId, overridden: (grid.rows.find((r) => r.task.task_id === t.task_id)?.overridden_platforms) ?? [] })} />
       ) : (
         <div className="center muted">{plans.length === 0 ? "В этом метаспринте нет планов. Создайте план снизу." : "Выберите план"}</div>
       )}
@@ -254,6 +319,7 @@ export function App() {
             )
           ))}
           {canEdit && <button className="tab tab-add" onClick={newPlan}>+ план</button>}
+          {canEdit && currentPlan && <button className="tab" onClick={duplicatePlan} title="Создать новый план на основе текущего (со всеми задачами, раскладкой и остатками)">⎘ создать на основе</button>}
           <span className="spacer" />
           {canEdit && currentPlan && (
             <span className="status-pick">
@@ -275,12 +341,15 @@ export function App() {
         <TaskModal task={openTask.task} estimates={openTask.est}
                    platforms={(grid?.platforms ?? auto?.platforms) ?? []}
                    canEdit={view === "plan" ? canEditPlan : canEdit}
+                   planId={openTask.planId} overridden={openTask.overridden}
                    onClose={() => setOpenTask(null)}
                    onSaved={() => { view === "auto" ? reloadAuto() : reloadGrid(); }} flash={flash} />
       )}
-      {velocityOpen && (
-        <VelocityModal onClose={() => setVelocityOpen(false)}
-                       onSaved={() => { view === "auto" ? reloadAuto() : reloadGrid(); }} flash={flash} />
+      {metaVelocityOpen && metasprintId !== null && (
+        <MetaVelocityModal quarterId={metasprintId}
+                           quarterName={metasprints.find((m) => m.quarter_id === metasprintId)?.quarter_name ?? ""}
+                           onClose={() => setMetaVelocityOpen(false)}
+                           onSaved={() => { if (view === "plan") reloadGrid(); }} flash={flash} />
       )}
     </div>
   );

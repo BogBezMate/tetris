@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AutoData, AutoRow, Plan } from "../types";
-import { visibleCols, platformsVisible, sprintsVisible, colWidth, loadWidths, saveWidths } from "./columns";
+import {
+  visibleCols, platformsVisible, sprintsVisible, colWidth, loadWidths, saveWidths,
+  passFilters, warnTitle, showWarn,
+  loadColFilters, saveColFilters, passColFilters, colFilterActive,
+  loadColOrder, saveColOrder, reorderCols,
+  type Filters, type ColFilter,
+} from "./columns";
+import { ColumnFilter } from "./ColumnFilter";
 import { money } from "../format";
 
 interface Props {
   data: AutoData;
   search: string;
   hidden: Set<string>;
+  filters: Filters;
   canEdit: boolean;
   targetPlan: Plan | null;
   onAdd: (taskId: number) => void;
@@ -16,14 +24,28 @@ interface Props {
 const ZONE_ORDER = ["MetaSprint", "AlphaSprint", "OpenSprint", "To be allocated"];
 const zoneRank = (z: string) => { const i = ZONE_ORDER.indexOf(z); return i === -1 ? 999 : i; };
 
-export function Autovygruzka({ data, search, hidden, canEdit, targetPlan, onAdd, onOpen }: Props) {
-  const cols = visibleCols(hidden);
+export function Autovygruzka({ data, search, hidden, filters, canEdit, targetPlan, onAdd, onOpen }: Props) {
+  const [colOrder, setColOrder] = useState<string[]>(loadColOrder);
+  const [dragCol, setDragCol] = useState<string | null>(null);
+  const cols = visibleCols(hidden, colOrder);
   const showPlat = platformsVisible(hidden);
   const showSprints = sprintsVisible(hidden);
   const [sortKey, setSortKey] = useState<string>("adjusted_ebitda");
   const [asc, setAsc] = useState(false);
   const [widths, setWidths] = useState<Record<string, number>>(loadWidths);
+  const [selId, setSelId] = useState<number | null>(null);  // выделенная строка (для удобной прокрутки)
+  const [colFilters, setColFilters] = useState<Record<string, ColFilter>>(loadColFilters);
   useEffect(() => { saveWidths(widths); }, [widths]);
+  function onColDrop(overKey: string) {
+    if (!dragCol || dragCol === overKey) { setDragCol(null); return; }
+    const next = reorderCols(colOrder, dragCol, overKey);
+    setColOrder(next); saveColOrder(next); setDragCol(null);
+  }
+  useEffect(() => { saveColFilters(colFilters); }, [colFilters]);
+  function setColFilter(key: string, f: ColFilter | undefined) {
+    setColFilters((prev) => { const n = { ...prev }; if (f) n[key] = f; else delete n[key]; return n; });
+  }
+  const anyColFilter = Object.values(colFilters).some(colFilterActive);
 
   function toggleSort(k: string) { if (k === sortKey) setAsc(!asc); else { setSortKey(k); setAsc(false); } }
   const arrow = (k: string) => (k === sortKey ? (asc ? " ▲" : " ▼") : "");
@@ -38,7 +60,10 @@ export function Autovygruzka({ data, search, hidden, canEdit, targetPlan, onAdd,
 
   const groups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const filtered = data.rows.filter((r) => !q || `${r.task.jira_key} ${r.task.task_summary ?? ""}`.toLowerCase().includes(q));
+    const filtered = data.rows.filter((r) =>
+      passFilters(r.task, filters) &&
+      passColFilters(colFilters, r.task as unknown as Record<string, unknown>, r.platform_estimates, data.platforms) &&
+      (!q || `${r.task.jira_key} ${r.task.task_summary ?? ""}`.toLowerCase().includes(q)));
     const byZone = new Map<string, AutoRow[]>();
     for (const r of filtered) { if (!byZone.has(r.zone_name)) byZone.set(r.zone_name, []); byZone.get(r.zone_name)!.push(r); }
     const sortRows = (rs: AutoRow[]) => [...rs].sort((a, b) => {
@@ -47,7 +72,7 @@ export function Autovygruzka({ data, search, hidden, canEdit, targetPlan, onAdd,
       return asc ? cmp : -cmp;
     });
     return [...byZone.keys()].sort((a, b) => zoneRank(a) - zoneRank(b)).map((n) => ({ zone: n, rows: sortRows(byZone.get(n)!) }));
-  }, [data.rows, search, sortKey, asc]);
+  }, [data.rows, data.platforms, search, filters, colFilters, sortKey, asc]);
 
   const wKey = colWidth(widths, "__key");
   const colspan = 2 + cols.length + (showPlat ? data.platforms.length : 0) + (showSprints ? data.platforms.length : 0);
@@ -57,7 +82,8 @@ export function Autovygruzka({ data, search, hidden, canEdit, targetPlan, onAdd,
   return (
     <div className="grid-wrap">
       <div className="grid-subtoolbar">
-        <span className="auto-badge">Автовыгрузка · группировка по колодцам (по меткам)</span>
+        <span className="auto-badge">Автовыгрузка · группировка по колодцам</span>
+        {anyColFilter && <button className="mini" onClick={() => setColFilters({})} title="Сбросить фильтры по столбцам">✕ фильтры столбцов</button>}
         <span className="spacer" />
         {canEdit && (
           <span className={`target-plan ${targetPlan ? "" : "no-target"}`}>
@@ -84,18 +110,24 @@ export function Autovygruzka({ data, search, hidden, canEdit, targetPlan, onAdd,
                 <span className="rsz" onMouseDown={(e) => startResize(e, "__summary")} />
               </th>
               {cols.map((c) => (
-                <th key={c.key} className={c.num ? "num" : ""}>
+                <th key={c.key} className={`${c.num ? "num" : ""}${dragCol === c.key ? " col-dragging" : ""}`}
+                    onDragOver={(e) => { if (dragCol) e.preventDefault(); }} onDrop={() => onColDrop(c.key)}>
+                  <span className="col-drag" draggable title="перетащить столбец"
+                        onDragStart={() => setDragCol(c.key)} onDragEnd={() => setDragCol(null)}>⠿</span>
                   <span className="sortable" onClick={() => toggleSort(c.key)}>{c.label}{arrow(c.key)}</span>
+                  <ColumnFilter colKey={c.key} numeric={!!c.num} filter={colFilters[c.key]} onChange={(f) => setColFilter(c.key, f)} />
                   <span className="rsz" onMouseDown={(e) => startResize(e, c.key)} />
                 </th>
               ))}
               {showPlat && data.platforms.map((p, i) => (
                 <th key={p.platform_id} className="col-plat" title={p.platform_name}>{p.platform_name}
+                  <ColumnFilter colKey={`plat_${p.platform_id}`} numeric filter={colFilters[`plat_${p.platform_id}`]} onChange={(f) => setColFilter(`plat_${p.platform_id}`, f)} />
                   {i === 0 && <span className="rsz" onMouseDown={(e) => startResize(e, "__plat")} />}
                 </th>
               ))}
               {showSprints && data.platforms.map((p, i) => (
                 <th key={`s${p.platform_id}`} className="col-plat col-sprint" title={`спринты по «${p.platform_name}» (velocity ${p.sp_per_sprint} SP/спринт)`}>сп: {p.platform_name}
+                  <ColumnFilter colKey={`spr_${p.platform_id}`} numeric filter={colFilters[`spr_${p.platform_id}`]} onChange={(f) => setColFilter(`spr_${p.platform_id}`, f)} />
                   {i === 0 && <span className="rsz" onMouseDown={(e) => startResize(e, "__sprint")} />}
                 </th>
               ))}
@@ -114,7 +146,9 @@ export function Autovygruzka({ data, search, hidden, canEdit, targetPlan, onAdd,
               {g.rows.map((r) => {
                 const t = r.task;
                 return (
-                  <tr key={t.task_id} className={r.in_plan ? "row-committed" : ""} onDoubleClick={() => onOpen(t)}>
+                  <tr key={t.task_id} className={`${r.in_plan ? "row-committed" : ""}${selId === t.task_id ? " row-selected" : ""}`}
+                      onClick={() => setSelId(selId === t.task_id ? null : t.task_id)}
+                      onDoubleClick={() => onOpen(t)}>
                     <td className="col-key">
                       {canEdit && (
                         <button className="pm plus" disabled={!targetPlan || r.in_plan}
@@ -122,7 +156,7 @@ export function Autovygruzka({ data, search, hidden, canEdit, targetPlan, onAdd,
                                 onClick={(e) => { e.stopPropagation(); onAdd(t.task_id); }}>{r.in_plan ? "✓" : "+"}</button>
                       )}
                       <span className="jira-key">{t.jira_key}</span>
-                      {t.is_underestimated && <span className="warn" title="Нет оценки">⚠</span>}
+                      {showWarn(t, filters) && <span className="warn" title={warnTitle(t, filters)}>⚠</span>}
                     </td>
                     <td className="col-summary" title={t.task_summary ?? ""}>{t.task_summary ?? "—"}</td>
                     {cols.map((c) => <td key={c.key} className={c.num ? "num" : ""}>{c.cell(t)}</td>)}

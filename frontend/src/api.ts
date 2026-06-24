@@ -7,6 +7,7 @@ import type {
   Presentation,
   PlatformRef,
   Quarter,
+  QuarterVelocity,
   TaskRanked,
   User,
   Zone,
@@ -69,6 +70,8 @@ export const api = {
     request<Plan[]>(`/api/plans${quarterId ? `?quarter_id=${quarterId}` : ""}`),
   createPlan: (body: { quarter_id: number; plan_name?: string }) =>
     request<Plan>("/api/plans", { method: "POST", body: JSON.stringify(body) }),
+  duplicatePlan: (planId: number) =>
+    request<Plan>(`/api/plans/${planId}/duplicate`, { method: "POST" }),
   board: (planId: number) => request<Board>(`/api/plans/${planId}/board`),
   grid: (planId: number) => request<Grid>(`/api/plans/${planId}/grid`),
   autovygruzka: (planId?: number) =>
@@ -100,6 +103,18 @@ export const api = {
     request<PlatformRef[]>("/api/platforms/velocity", {
       method: "PUT",
       body: JSON.stringify(items),
+    }),
+  quarterVelocity: (quarterId: number) =>
+    request<QuarterVelocity[]>(`/api/quarters/${quarterId}/velocity`),
+  saveQuarterVelocity: (quarterId: number, items: { platform_id: number; capacity_sp: number | null; sp_per_sprint: number | null }[]) =>
+    request<QuarterVelocity[]>(`/api/quarters/${quarterId}/velocity`, {
+      method: "PUT",
+      body: JSON.stringify(items),
+    }),
+  savePlanEstimates: (planId: number, taskId: number, items: { platform_id: number; estimate_sp: number | null }[]) =>
+    request<{ ok: boolean }>(`/api/plans/${planId}/tasks/${taskId}/estimates`, {
+      method: "PUT",
+      body: JSON.stringify({ items }),
     }),
   deletePlan: (planId: number) =>
     request<{ ok: boolean }>(`/api/plans/${planId}`, { method: "DELETE" }),

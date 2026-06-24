@@ -44,6 +44,7 @@ class ParsedTask:
     contractor_cost_rub: float | None = None
     coefficient: str | None = None
     current_sprint: str | None = None
+    has_active_sprint: bool = False
     end_date: date | None = None
     baseline_end_date: date | None = None
     jira_updated_at: datetime | None = None
@@ -133,6 +134,17 @@ def _active_sprint_name(value) -> str | None:
     return last_name
 
 
+def _has_active_sprint(value) -> bool:
+    """True, если хотя бы у одного спринта задачи state=ACTIVE (→ колодец OpenSprint)."""
+    if not value:
+        return False
+    for raw in (value if isinstance(value, list) else [value]):
+        m = _SPRINT_STATE_RE.search(str(raw))
+        if m and m.group(1).strip().upper() == "ACTIVE":
+            return True
+    return False
+
+
 class JiraFieldMapper:
     """Разбирает одну задачу Jira (issue dict) в ParsedTask."""
 
@@ -166,16 +178,22 @@ class JiraFieldMapper:
             contractor_cost_rub=_num(f.get(jf.CF_CONTRACTOR_COST)),
             coefficient=_opt_value(f.get(jf.CF_COEFFICIENT)),
             current_sprint=_active_sprint_name(f.get(jf.CF_SPRINT)),
+            has_active_sprint=_has_active_sprint(f.get(jf.CF_SPRINT)),
             end_date=_as_date(f.get(jf.CF_END_DATE)),
             baseline_end_date=_as_date(f.get(jf.CF_BASELINE_END_DATE)),
             jira_updated_at=_as_datetime(f.get("updated")),
             labels=list(f.get("labels") or []),
         )
 
-        required = {
-            _opt_value(v)
-            for v in (f.get(jf.CF_PLATFORM_SELECTOR) or [])
-        }
+        required: set[str] = set()
+        for v in (f.get(jf.CF_PLATFORM_SELECTOR) or []):
+            raw = _opt_value(v)
+            if raw is None:
+                continue
+            name = jf.PLATFORM_ALIASES.get(raw, raw)  # нормализуем написание
+            if name in jf.PLATFORM_IGNORE:
+                continue  # не платформа (нет оценок/справочника)
+            required.add(name)
         for name, cf_id in jf.PLATFORM_FIELDS.items():
             estimate = _num(f.get(cf_id))
             is_required = name in required

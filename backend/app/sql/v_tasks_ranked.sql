@@ -24,6 +24,7 @@ SELECT
     t.coefficient,
     t.ceo_priority,
     t.current_sprint,
+    t.has_active_sprint,
     t.end_date,
     t.baseline_end_date,
     t.max_sprints_override,
@@ -53,13 +54,39 @@ SELECT
         ELSE 0
     END AS ebitda_per_story_point,
 
-    -- Недооценённость: есть требуемая платформа без оценки (показываем, не прячем).
+    -- 4 НЕПЕРЕСЕКАЮЩИХСЯ признака качества оценки (для фильтра/пометок).
+    -- Базовые условия: есть выбранная платформа / есть хоть одна оценка.
+
+    -- (1) Недооценена: есть ВЫБРАННАЯ платформа без оценки.
     EXISTS (
         SELECT 1 FROM task_platforms tp
         WHERE tp.task_id = t.task_id
           AND tp.is_required = TRUE
           AND COALESCE(tp.estimate_story_points, 0) = 0
     ) AS is_underestimated,
+
+    -- (2) Без платформ (пусто): нет выбранных платформ И нет ни одной оценки.
+    (NOT EXISTS (SELECT 1 FROM task_platforms tp
+                 WHERE tp.task_id = t.task_id AND tp.is_required = TRUE)
+     AND NOT EXISTS (SELECT 1 FROM task_platforms tp
+                     WHERE tp.task_id = t.task_id AND COALESCE(tp.estimate_story_points, 0) > 0)
+    ) AS is_unplatformed,
+
+    -- (3) Оценка есть, команда не выбрана: нет выбранных платформ, НО есть оценка.
+    (NOT EXISTS (SELECT 1 FROM task_platforms tp
+                 WHERE tp.task_id = t.task_id AND tp.is_required = TRUE)
+     AND EXISTS (SELECT 1 FROM task_platforms tp
+                 WHERE tp.task_id = t.task_id AND COALESCE(tp.estimate_story_points, 0) > 0)
+    ) AS has_estimate_no_team,
+
+    -- (4) Оценка у невыбранной платформы (смешанный): есть выбранные платформы
+    -- И при этом оценка стоит у НЕвыбранной.
+    (EXISTS (SELECT 1 FROM task_platforms tp
+             WHERE tp.task_id = t.task_id AND tp.is_required = TRUE)
+     AND EXISTS (SELECT 1 FROM task_platforms tp
+                 WHERE tp.task_id = t.task_id AND tp.is_required = FALSE
+                   AND COALESCE(tp.estimate_story_points, 0) > 0)
+    ) AS has_unselected_estimate,
 
     -- МАКСИМУМ спринтов (как в Excel: ROUNDUP(MAX(оценка_платформы / velocity_платформы))).
     -- Если задан ручной max_sprints_override (>0) — берём его, иначе считаем автоматически.

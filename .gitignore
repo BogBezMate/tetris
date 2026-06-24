@@ -27,7 +27,9 @@ dist/
 Thumbs.db
 
 # --- рабочие материалы, не для репозитория ---
+_*.txt
 Recording*.txt
+Screen Recording*.txt
 *.drawio
 *.drawio.bkp
 .$*

@@ -56,6 +56,7 @@ class TaskRankedOut(ORMModel):
     coefficient: str | None = None
     ceo_priority: int | None = None
     current_sprint: str | None = None
+    has_active_sprint: bool = False
     end_date: date | None = None
     baseline_end_date: date | None = None
     labels: str | None = None
@@ -63,6 +64,9 @@ class TaskRankedOut(ORMModel):
     adjusted_annual_effect: float
     ebitda_per_story_point: float
     is_underestimated: bool
+    is_unplatformed: bool = False
+    has_estimate_no_team: bool = False
+    has_unselected_estimate: bool = False
     max_sprints: float
     max_sprints_override: int | None = None
 
@@ -82,6 +86,31 @@ class PlatformEstimateIn(BaseModel):
 class PlatformVelocityIn(BaseModel):
     platform_id: int
     sp_per_sprint: float
+
+
+class QuarterVelocityIn(BaseModel):
+    """Velocity платформы в метаспринте. None в поле = снять (вернуть к дефолту)."""
+    platform_id: int
+    capacity_sp: float | None = None       # ёмкость за метаспринт (Velocity per Meta)
+    sp_per_sprint: float | None = None     # делитель «SP за спринт» для этого метаспринта
+
+
+class QuarterVelocityOut(BaseModel):
+    platform_id: int
+    platform_name: str
+    capacity_sp: float | None = None
+    sp_per_sprint: float | None = None             # override метаспринта (None = дефолт)
+    sp_per_sprint_default: float = 5               # глобальный дефолт (для placeholder)
+
+
+class PlanEstimateIn(BaseModel):
+    """Остаточная оценка по платформе в плане. None = сброс к Jira (удалить override)."""
+    platform_id: int
+    estimate_sp: float | None = None
+
+
+class PlanEstimatesIn(BaseModel):
+    items: list[PlanEstimateIn]
 
 
 class TaskUpdate(BaseModel):
@@ -115,8 +144,10 @@ class GridRow(BaseModel):
     zone_id: int | None = None
     plan_item_id: int | None = None
     item_position: int = 0
-    # оценки по платформам: platform_id -> story points
+    # оценки по платформам: platform_id -> story points (с учётом остатка плана)
     platform_estimates: dict[int, float] = {}
+    # platform_id-ы, чьи оценки переопределены остатком в этом плане (отличаются от Jira)
+    overridden_platforms: list[int] = []
 
 
 class GridOut(BaseModel):
@@ -125,6 +156,8 @@ class GridOut(BaseModel):
     zones: list["ZoneOut"]
     rows: list[GridRow]
     presentation: dict | None = None
+    # Velocity per Meta: ёмкость платформы за метаспринт (platform_id -> SP), для подсветки перегруза
+    velocity_per_meta: dict[int, float] = {}
 
 
 class AutoRow(BaseModel):
